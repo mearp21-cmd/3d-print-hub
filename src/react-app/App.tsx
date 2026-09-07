@@ -107,4 +107,36 @@ function App() {
   >(null);
 
   const [favourites, setFavourites] = useState<string[]>([]);
+  const filteredDesigns = useMemo(() => {
+  const results = designs.filter((design) => {
+    const text =
+      `${design.title} ${design.creator} ${design.category}`.toLowerCase();
+
+    const matchesSearch = text.includes(search.toLowerCase());
+
+    const matchesCategory =
+      category === "All" || design.category === category;
+
+    const matchesAccess =
+      access === "All" || design.access === access;
+
+    return matchesSearch && matchesCategory && matchesAccess;
+  });
+
+  return [...results].sort((a, b) => {
+    if (sort === "Most downloaded") {
+      return b.downloadNumber - a.downloadNumber;
+    }
+
+    if (sort === "Highest rated") {
+      return Number(b.rating) - Number(a.rating);
+    }
+
+    if (sort === "Newest") {
+      return a.age - b.age;
+    }
+
+    return b.downloadNumber - a.downloadNumber;
+  });
+}, [search, category, access, sort]);
 
