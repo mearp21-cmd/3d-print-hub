@@ -908,3 +908,341 @@ a {
     flex-direction: column;
   }
 	}
+/* ========================================= */
+/* 3D PRINT HUB - MARKETPLACE UPGRADES */
+/* ========================================= */
+
+/* Explore controls */
+
+.exploreControls {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.exploreControls select {
+  min-width: 150px;
+}
+
+/* Blueprint access badge */
+
+.designTag {
+  z-index: 2;
+}
+
+/* Favourite button */
+
+.heart {
+  z-index: 3;
+  cursor: pointer;
+  transition:
+    transform 0.2s ease,
+    color 0.2s ease,
+    background 0.2s ease;
+}
+
+.heart:hover {
+  transform: scale(1.15);
+}
+
+.heart:active {
+  transform: scale(0.95);
+}
+
+/* Blueprint details modal */
+
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(0, 0, 0, 0.78);
+  backdrop-filter: blur(12px);
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 24px;
+}
+
+.blueprintModal {
+  position: relative;
+
+  width: min(900px, 100%);
+  max-height: 90vh;
+
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+
+  background: #111820;
+
+  border: 1px solid rgba(0, 229, 255, 0.25);
+
+  border-radius: 24px;
+
+  box-shadow:
+    0 30px 100px rgba(0, 0, 0, 0.6);
+
+  overflow: hidden;
+}
+
+/* Close button */
+
+.modalClose {
+  position: absolute;
+
+  right: 18px;
+  top: 18px;
+
+  z-index: 5;
+
+  width: 42px;
+  height: 42px;
+
+  border-radius: 50%;
+
+  border: 1px solid rgba(255, 255, 255, 0.15);
+
+  background: rgba(0, 0, 0, 0.45);
+
+  color: white;
+
+  font-size: 28px;
+
+  cursor: pointer;
+
+  transition:
+    transform 0.2s ease,
+    background 0.2s ease;
+}
+
+.modalClose:hover {
+  transform: rotate(90deg);
+
+  background: rgba(0, 229, 255, 0.15);
+}
+
+/* Modal visual */
+
+.modalVisual {
+  min-height: 430px;
+
+  position: relative;
+
+  display: flex;
+
+  align-items: center;
+
+  justify-content: center;
+
+  background:
+    radial-gradient(
+      circle at center,
+      rgba(0, 229, 255, 0.15),
+      transparent 55%
+    ),
+    #0a1016;
+}
+
+.modalEmoji {
+  font-size: 150px;
+
+  filter:
+    drop-shadow(
+      0 20px 30px rgba(0, 0, 0, 0.5)
+    );
+
+  animation:
+    modalFloat 4s ease-in-out infinite;
+}
+
+.modalTag {
+  position: absolute;
+
+  top: 24px;
+  left: 24px;
+
+  padding: 7px 12px;
+
+  border-radius: 999px;
+
+  background: rgba(0, 229, 255, 0.12);
+
+  border: 1px solid rgba(0, 229, 255, 0.25);
+
+  color: #7eeeff;
+
+  font-size: 12px;
+
+  font-weight: 800;
+
+  letter-spacing: 0.08em;
+}
+
+/* Modal content */
+
+.modalContent {
+  padding: 50px 40px 40px;
+}
+
+.modalContent h2 {
+  font-size: clamp(30px, 4vw, 46px);
+
+  line-height: 1.05;
+
+  margin: 10px 0;
+}
+
+.modalCreator {
+  color: rgba(255, 255, 255, 0.65);
+}
+
+.modalStats {
+  display: flex;
+
+  gap: 18px;
+
+  flex-wrap: wrap;
+
+  margin: 24px 0;
+
+  color: #7eeeff;
+
+  font-weight: 700;
+}
+
+.modalDescription {
+  color: rgba(255, 255, 255, 0.68);
+
+  line-height: 1.7;
+}
+
+/* File type badges */
+
+.fileTypes {
+  display: flex;
+
+  gap: 8px;
+
+  margin: 24px 0;
+
+  flex-wrap: wrap;
+}
+
+.fileTypes span {
+  padding: 7px 10px;
+
+  border-radius: 7px;
+
+  background: rgba(255, 255, 255, 0.06);
+
+  border: 1px solid rgba(255, 255, 255, 0.1);
+
+  font-size: 11px;
+
+  font-weight: 800;
+
+  letter-spacing: 0.08em;
+}
+
+/* Full-width buttons */
+
+.full {
+  width: 100%;
+}
+
+/* Modal animation */
+
+@keyframes modalFloat {
+  0%,
+  100% {
+    transform:
+      translateY(0)
+      rotate(-3deg);
+  }
+
+  50% {
+    transform:
+      translateY(-12px)
+      rotate(3deg);
+  }
+}
+
+/* Empty search result */
+
+.empty {
+  padding: 50px 20px;
+
+  text-align: center;
+
+  color: rgba(255, 255, 255, 0.55);
+
+  font-size: 18px;
+}
+
+/* ========================================= */
+/* MOBILE */
+/* ========================================= */
+
+@media (max-width: 720px) {
+
+  .exploreControls {
+    width: 100%;
+
+    justify-content: stretch;
+  }
+
+  .exploreControls select {
+    flex: 1;
+
+    min-width: 0;
+  }
+
+  .blueprintModal {
+    grid-template-columns: 1fr;
+
+    max-height: 92vh;
+
+    overflow-y: auto;
+  }
+
+  .modalVisual {
+    min-height: 260px;
+  }
+
+  .modalEmoji {
+    font-size: 100px;
+  }
+
+  .modalContent {
+    padding: 30px 24px;
+  }
+
+}
+
+/* Smaller phones */
+
+@media (max-width: 480px) {
+
+  .exploreControls {
+    flex-direction: column;
+  }
+
+  .exploreControls select {
+    width: 100%;
+  }
+
+  .modalOverlay {
+    padding: 12px;
+  }
+
+  .modalVisual {
+    min-height: 220px;
+  }
+
+  .modalEmoji {
+    font-size: 80px;
+  }
+
+}
