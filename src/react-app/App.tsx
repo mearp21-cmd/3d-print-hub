@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
 import "./App.css";
-
 const categories = [
   { icon: "🔧", name: "Tools & DIY", count: "1,240 designs" },
   { icon: "🚗", name: "Automotive", count: "860 designs" },
@@ -8,7 +7,9 @@ const categories = [
   { icon: "🏠", name: "Home", count: "1,875 designs" },
   { icon: "🎨", name: "Models", count: "3,120 designs" },
   { icon: "⚙️", name: "Engineering", count: "940 designs" },
-   const designs = [
+];
+
+const designs = [
   {
     title: "Modular Workshop Organiser",
     creator: "PrintForge",
@@ -90,7 +91,20 @@ const categories = [
     icon: "🔩",
     access: "Free",
     age: 15,
-    description:
+        description:
       "Small precision cable clips designed for clean and organised cable management.",
   },
 ];
+
+function App() {
+  const [search, setSearch] = useState("");
+  const [category, setCategory] = useState("All");
+  const [access, setAccess] = useState("All");
+  const [sort, setSort] = useState("Trending");
+  const [notice, setNotice] = useState("");
+  const [selectedDesign, setSelectedDesign] = useState<
+    (typeof designs)[number] | null
+  >(null);
+
+  const [favourites, setFavourites] = useState<string[]>([]);
+
