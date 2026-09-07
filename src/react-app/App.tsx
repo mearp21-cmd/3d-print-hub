@@ -107,6 +107,7 @@ function App() {
   >(null);
 
   const [favourites, setFavourites] = useState<string[]>([]);
+ 
   const filteredDesigns = useMemo(() => {
   const results = designs.filter((design) => {
     const text =
