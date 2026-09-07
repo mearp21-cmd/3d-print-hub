@@ -85,7 +85,7 @@ function App() {
     });
   }, [search, category]);
 
-  const showNotice = (message) => {
+  const showNotice = (message: string) => {
     setNotice(message);
 
     setTimeout(() => {
