@@ -1,5 +1,4 @@
-import { useEffect, useMemo, useState } from 
-  "react";
+import { useEffect, useMemo, useState } from "react";
 import "./App.css";
 
 const categories = [
@@ -102,7 +101,7 @@ const designs = [
 ];
 
 function App() {
-  const [livedesigns, search, setSearch] = useState("");
+  const [search, setSearch] = useState("");
   const [category, setCategory] = useState("All");
   const [access, setAccess] = useState("All");
   const [sort, setSort] = useState("Trending");
@@ -1629,6 +1628,6 @@ function App() {
 
     </div>
   );
-}
+
 
 export default App;
