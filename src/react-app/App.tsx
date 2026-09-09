@@ -121,7 +121,54 @@ function App() {
   const [creatorName, setCreatorName] = useState("");
   const [selectedFile, setSelectedFile] = useState("");
   const [previewFile, setPreviewFile] = useState("");
+  useEffect(() => {
+    const loadBlueprints = async () => {
+      try {
+        const response = await fetch(
+          `${API_URL}/api/blueprints`
+        );
 
+        if (!response.ok) {
+          throw new Error("Failed to load blueprints");
+        }
+
+        const data = await response.json();
+
+        if (data.success && data.blueprints?.length > 0) {
+          const databaseDesigns = data.blueprints.map(
+            (blueprint: any) => ({
+              title: blueprint.name,
+              creator: blueprint.creator,
+              category: blueprint.category,
+              rating: String(blueprint.rating || 0),
+              downloads: `${blueprint.downloads || 0}`,
+              downloadNumber: blueprint.downloads || 0,
+              tag:
+                blueprint.access_type === "Pro"
+                  ? "Pro"
+                  : "New",
+              icon: "🖨️",
+              access: blueprint.access_type || "Free",
+              age: 0,
+              description:
+                blueprint.description ||
+                "A 3D-printable blueprint shared by the 3D Print Hub community.",
+            })
+          );
+
+          setLiveDesigns(databaseDesigns);
+        }
+      } catch (error) {
+        console.error(
+          "Unable to load blueprints:",
+          error
+        );
+      }
+    };
+
+    loadBlueprints();
+  }, []);
+  
   const filteredDesigns = useMemo(() => {
     const results = designs.filter((design) => {
       const text =
