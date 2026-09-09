@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import "./App.css";
 
 const categories = [
@@ -109,10 +109,10 @@ function App() {
   const [selectedDesign, setSelectedDesign] = useState<
     (typeof designs)[number] | null
   >(null);
+  
   const [favourites, setFavourites] = useState<string[]>([]);
-
   const [showUpload, setShowUpload] = useState(false);
-
+  const [liveDesigns, setLiveDesigns] = useState(designs);
   const [uploadName, setUploadName] = useState("");
   const [uploadDescription, setUploadDescription] = useState("");
   const [uploadCategory, setUploadCategory] = useState("Tools & DIY");
