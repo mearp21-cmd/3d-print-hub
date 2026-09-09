@@ -170,7 +170,7 @@ function App() {
   }, []);
   
   const filteredDesigns = useMemo(() => {
-    const results = designs.filter((design) => {
+    const results = livedesigns.filter((design) => {
       const text =
         `${design.title} ${design.creator} ${design.category}`.toLowerCase();
 
