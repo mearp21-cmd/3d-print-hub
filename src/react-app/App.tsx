@@ -109,7 +109,7 @@ function App() {
   const [selectedDesign, setSelectedDesign] = useState<
     (typeof designs)[number] | null
   >(null);
-  
+
   const [favourites, setFavourites] = useState<string[]>([]);
   const [showUpload, setShowUpload] = useState(false);
   const [liveDesigns, setLiveDesigns] = useState(designs);
@@ -121,6 +121,7 @@ function App() {
   const [creatorName, setCreatorName] = useState("");
   const [selectedFile, setSelectedFile] = useState("");
   const [previewFile, setPreviewFile] = useState("");
+
   useEffect(() => {
     const loadBlueprints = async () => {
       try {
@@ -168,13 +169,15 @@ function App() {
 
     loadBlueprints();
   }, []);
-  
+
   const filteredDesigns = useMemo(() => {
-    const results = livedesigns.filter((design) => {
+    const results = liveDesigns.filter((design) => {
       const text =
         `${design.title} ${design.creator} ${design.category}`.toLowerCase();
 
-      const matchesSearch = text.includes(search.toLowerCase());
+      const matchesSearch = text.includes(
+        search.toLowerCase()
+      );
 
       const matchesCategory =
         category === "All" || design.category === category;
@@ -182,7 +185,11 @@ function App() {
       const matchesAccess =
         access === "All" || design.access === access;
 
-      return matchesSearch && matchesCategory && matchesAccess;
+      return (
+        matchesSearch &&
+        matchesCategory &&
+        matchesAccess
+      );
     });
 
     return [...results].sort((a, b) => {
@@ -200,7 +207,13 @@ function App() {
 
       return b.downloadNumber - a.downloadNumber;
     });
-  }, [search, category, access, sort]);
+  }, [
+    liveDesigns,
+    search,
+    category,
+    access,
+    sort,
+  ]);
 
   const showNotice = (message: string) => {
     setNotice(message);
@@ -237,7 +250,9 @@ function App() {
     );
   };
 
-  const handleDownload = (design: (typeof designs)[number]) => {
+  const handleDownload = (
+    design: (typeof designs)[number]
+  ) => {
     if (design.access === "Pro") {
       showNotice(
         "💎 This blueprint requires Pro membership. Membership payments are coming soon."
@@ -271,81 +286,80 @@ function App() {
   };
 
   const handlePublish = async () => {
-  if (!uploadName.trim()) {
-    showNotice("⚠️ Please enter a blueprint name.");
-    return;
-  }
-
-  if (!creatorName.trim()) {
-    showNotice("⚠️ Please enter your creator name.");
-    return;
-  }
-
-  if (!uploadDescription.trim()) {
-    showNotice("⚠️ Please enter a description.");
-    return;
-  }
-
-  if (!selectedFile) {
-    showNotice("⚠️ Please select your blueprint file.");
-    return;
-  }
-
-  try {
-    showNotice("🚀 Publishing blueprint...");
-
-    const response = await fetch(
-      `${API_URL}/api/blueprints`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          name: uploadName.trim(),
-          description: uploadDescription.trim(),
-          creator: creatorName.trim(),
-          category: uploadCategory,
-          access_type: uploadAccess,
-          price:
-            uploadAccess === "Pro"
-              ? Number(uploadPrice) || 0
-              : 0,
-        }),
-      }
-    );
-
-    const data = await response.json();
-
-    if (!response.ok || !data.success) {
-      throw new Error(
-        data.error || "Unable to publish blueprint."
-      );
+    if (!uploadName.trim()) {
+      showNotice("⚠️ Please enter a blueprint name.");
+      return;
     }
 
-    showNotice(
-      "🎉 Blueprint published successfully!"
-    );
+    if (!creatorName.trim()) {
+      showNotice("⚠️ Please enter your creator name.");
+      return;
+    }
 
-    setUploadName("");
-    setUploadDescription("");
-    setUploadCategory("Tools & DIY");
-    setUploadAccess("Free");
-    setUploadPrice("");
-    setCreatorName("");
-    setSelectedFile("");
-    setPreviewFile("");
-    setShowUpload(false);
+    if (!uploadDescription.trim()) {
+      showNotice("⚠️ Please enter a description.");
+      return;
+    }
 
-    window.location.reload();
-  } catch (error) {
-    console.error("Publish error:", error);
+    if (!selectedFile) {
+      showNotice("⚠️ Please select your blueprint file.");
+      return;
+    }
 
-    showNotice(
-      "❌ Something went wrong while publishing."
-    );
-  }
-};
+    try {
+      showNotice("🚀 Publishing blueprint...");
+
+      const response = await fetch(
+        `${API_URL}/api/blueprints`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            name: uploadName.trim(),
+            description: uploadDescription.trim(),
+            creator: creatorName.trim(),
+            category: uploadCategory,
+            access_type: uploadAccess,
+            price:
+              uploadAccess === "Pro"
+                ? Number(uploadPrice) || 0
+                : 0,
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(
+          data.error || "Unable to publish blueprint."
+        );
+      }
+
+      showNotice(
+        "🎉 Blueprint published successfully!"
+      );
+
+      setUploadName("");
+      setUploadDescription("");
+      setUploadCategory("Tools & DIY");
+      setUploadAccess("Free");
+      setUploadPrice("");
+      setCreatorName("");
+      setSelectedFile("");
+      setPreviewFile("");
+      setShowUpload(false);
+
+      window.location.reload();
+    } catch (error) {
+      console.error("Publish error:", error);
+
+      showNotice(
+        "❌ Something went wrong while publishing."
+      );
+    }
   };
 
   return (
@@ -389,7 +403,9 @@ function App() {
           <button
             className="loginButton"
             onClick={() =>
-              showNotice("User accounts will be connected next.")
+              showNotice(
+                "User accounts will be connected next."
+              )
             }
           >
             Sign in
