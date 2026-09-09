@@ -10,6 +10,9 @@ const categories = [
   { icon: "⚙️", name: "Engineering", count: "940 designs" },
 ];
 
+const API_URL =
+  "https://3d-print-hub-api.mearp21.workers.dev";
+
 const designs = [
   {
     title: "Modular Workshop Organiser",
