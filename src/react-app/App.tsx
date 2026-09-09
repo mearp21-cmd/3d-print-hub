@@ -271,32 +271,82 @@ function App() {
     setPreviewFile(file.name);
   };
 
-  const handlePublish = (event: React.FormEvent) => {
-    event.preventDefault();
+  const handlePublish = async () => {
+  if (!uploadName.trim()) {
+    showNotice("⚠️ Please enter a blueprint name.");
+    return;
+  }
 
-    if (!uploadName.trim()) {
-      showNotice("⚠️ Please enter a blueprint name.");
-      return;
-    }
+  if (!creatorName.trim()) {
+    showNotice("⚠️ Please enter your creator name.");
+    return;
+  }
 
-    if (!creatorName.trim()) {
-      showNotice("⚠️ Please enter your creator name.");
-      return;
-    }
+  if (!uploadDescription.trim()) {
+    showNotice("⚠️ Please enter a description.");
+    return;
+  }
 
-    if (!selectedFile) {
-      showNotice("⚠️ Please select your blueprint file.");
-      return;
-    }
+  if (!selectedFile) {
+    showNotice("⚠️ Please select your blueprint file.");
+    return;
+  }
 
-    if (uploadAccess === "Paid" && !uploadPrice) {
-      showNotice("⚠️ Please enter a price for your blueprint.");
-      return;
+  try {
+    showNotice("🚀 Publishing blueprint...");
+
+    const response = await fetch(
+      `${API_URL}/api/blueprints`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: uploadName.trim(),
+          description: uploadDescription.trim(),
+          creator: creatorName.trim(),
+          category: uploadCategory,
+          access_type: uploadAccess,
+          price:
+            uploadAccess === "Pro"
+              ? Number(uploadPrice) || 0
+              : 0,
+        }),
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok || !data.success) {
+      throw new Error(
+        data.error || "Unable to publish blueprint."
+      );
     }
 
     showNotice(
-      "🚀 Blueprint ready! Storage and publishing will be connected next."
+      "🎉 Blueprint published successfully!"
     );
+
+    setUploadName("");
+    setUploadDescription("");
+    setUploadCategory("Tools & DIY");
+    setUploadAccess("Free");
+    setUploadPrice("");
+    setCreatorName("");
+    setSelectedFile("");
+    setPreviewFile("");
+    setShowUpload(false);
+
+    window.location.reload();
+  } catch (error) {
+    console.error("Publish error:", error);
+
+    showNotice(
+      "❌ Something went wrong while publishing."
+    );
+  }
+};
   };
 
   return (
