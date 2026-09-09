@@ -101,7 +101,7 @@ const designs = [
 ];
 
 function App() {
-  const [search, setSearch] = useState("");
+  const [livedesigns, search, setSearch] = useState("");
   const [category, setCategory] = useState("All");
   const [access, setAccess] = useState("All");
   const [sort, setSort] = useState("Trending");
