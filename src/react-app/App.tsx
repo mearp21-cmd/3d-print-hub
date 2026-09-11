@@ -10,8 +10,7 @@ const categories = [
   { icon: "⚙️", name: "Engineering", count: "940 designs" },
 ];
 
-const API_URL =
-  "https://3d-print-hub-api.mearp21.workers.dev";
+const API_URL = "/api/blueprints";
 
 const designs = [
   {
@@ -126,7 +125,7 @@ function App() {
     const loadBlueprints = async () => {
       try {
         const response = await fetch(
-          `${API_URL}/api/blueprints`
+          API_URL
         );
 
         if (!response.ok) {
@@ -310,7 +309,7 @@ function App() {
       showNotice("🚀 Publishing blueprint...");
 
       const response = await fetch(
-        `${API_URL}/api/blueprints`,
+        API_URL,
         {
           method: "POST",
           headers: {
