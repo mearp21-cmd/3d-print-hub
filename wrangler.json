@@ -3,7 +3,9 @@
 	"name": "3d-print-hub",
 	"main": "./src/worker/index.ts",
 	"compatibility_date": "2025-10-08",
-	"compatibility_flags": ["nodejs_compat"],
+	"compatibility_flags": [
+		"nodejs_compat"
+	],
 	"observability": {
 		"enabled": true
 	},
@@ -11,5 +13,12 @@
 	"assets": {
 		"directory": "./dist/client",
 		"not_found_handling": "single-page-application"
-	}
+	},
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "3d-print-hub-db",
+			"database_id": "3d3dc7c2-14f5-434e-afc9-17f9e2e047bf"
+		}
+	]
 }
