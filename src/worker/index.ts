@@ -1,20 +1,22 @@
 import { Hono } from "hono";
 
-type Blueprint = {
+type ExistingBlueprintRow = {
   id: number;
-  slug: string;
   name: string;
   description: string;
   creator: string;
   category: string;
-  access_type: "Free" | "Paid" | "Pro";
-  price_cents: number;
-  price: number;
-  storage_key: string | null;
+  file_key: string | null;
   preview_key: string | null;
+  access_type: string;
+  price: number;
   downloads: number;
+  rating: number;
   created_at: string;
-  updated_at: string;
+};
+
+type Blueprint = ExistingBlueprintRow & {
+  access_type: string;
 };
 
 type CreateBlueprintInput = {
@@ -28,28 +30,19 @@ type CreateBlueprintInput = {
 
 const app = new Hono<{ Bindings: Env }>();
 
-const publishedBlueprintsQuery = [
-  "SELECT",
-  "  id,",
-  "  slug,",
-  "  name,",
-  "  description,",
-  "  creator_name AS creator,",
-  "  category,",
-  "  CASE access_type",
-  "    WHEN 'free' THEN 'Free'",
-  "    WHEN 'paid' THEN 'Paid'",
-  "    WHEN 'pro' THEN 'Pro'",
-  "  END AS access_type,",
-  "  price_cents,",
-  "  price_cents / 100.0 AS price,",
-  "  storage_key,",
-  "  preview_key,",
-  "  download_count AS downloads,",
-  "  created_at,",
-  "  updated_at",
-  "FROM blueprints",
-  "WHERE status = 'published'",
+const blueprintColumns = [
+  "id,",
+  "name,",
+  "description,",
+  "creator,",
+  "category,",
+  "file_key,",
+  "preview_key,",
+  "access_type,",
+  "price,",
+  "downloads,",
+  "rating,",
+  "created_at",
 ].join("\n");
 
 function readRequiredString(
@@ -63,37 +56,33 @@ function readRequiredString(
   return { value: value.trim() };
 }
 
-function slugify(name: string): string {
-  const slug = name
-    .toLowerCase()
-    .normalize("NFKD")
-    .replace(/[\\u0300-\\u036f]/g, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-
-  return slug || "blueprint";
+function normalizeAccessType(value: string): string {
+  switch (value.toLowerCase()) {
+    case "free":
+      return "Free";
+    case "paid":
+      return "Paid";
+    case "pro":
+      return "Pro";
+    default:
+      return value;
+  }
 }
 
-async function createUniqueSlug(
-  database: D1Database,
-  name: string,
-): Promise<string> {
-  const baseSlug = slugify(name);
-  let suffix = 1;
+function toBlueprint(row: ExistingBlueprintRow): Blueprint {
+  return {
+    ...row,
+    access_type: normalizeAccessType(row.access_type),
+  };
+}
 
-  while (true) {
-    const slug = suffix === 1 ? baseSlug : baseSlug + "-" + suffix;
-    const existing = await database
-      .prepare("SELECT id FROM blueprints WHERE slug = ? LIMIT 1")
-      .bind(slug)
-      .first<{ id: number }>();
-
-    if (!existing) {
-      return slug;
-    }
-
-    suffix += 1;
+function parseBlueprintId(value: string): number | null {
+  if (!/^[1-9]\d*$/.test(value)) {
+    return null;
   }
+
+  const id = Number(value);
+  return Number.isSafeInteger(id) ? id : null;
 }
 
 function parseCreateBlueprintInput(
@@ -128,9 +117,11 @@ function parseCreateBlueprintInput(
     return { error: "access_type must be Free, Paid, or Pro." };
   }
 
+  const priceValue =
+    typeof input.price === "string" ? input.price.trim() : input.price;
   const price =
-    typeof input.price === "number" || typeof input.price === "string"
-      ? Number(input.price)
+    typeof priceValue === "number" || typeof priceValue === "string"
+      ? Number(priceValue)
       : Number.NaN;
   if (!Number.isFinite(price) || price < 0) {
     return { error: "price must be a non-negative number." };
@@ -148,30 +139,41 @@ function parseCreateBlueprintInput(
   };
 }
 
-app.get("/api/health", (c) => c.json({ success: true }));
+app.get("/api/health", (c) =>
+  c.json({ success: true, service: "3d-print-hub-api" }),
+);
 
 app.get("/api/blueprints", async (c) => {
   const result = await c.env.DB
-    .prepare(publishedBlueprintsQuery + " ORDER BY created_at DESC, id DESC")
-    .all<Blueprint>();
+    .prepare(
+      "SELECT " +
+        blueprintColumns +
+        " FROM blueprints ORDER BY created_at DESC, id DESC",
+    )
+    .all<ExistingBlueprintRow>();
 
   return c.json({
     success: true,
-    blueprints: result.results,
+    blueprints: result.results.map(toBlueprint),
   });
 });
 
-app.get("/api/blueprints/:slug", async (c) => {
+app.get("/api/blueprints/:id", async (c) => {
+  const id = parseBlueprintId(c.req.param("id"));
+  if (!id) {
+    return c.json({ success: false, error: "Blueprint not found." }, 404);
+  }
+
   const blueprint = await c.env.DB
-    .prepare(publishedBlueprintsQuery + " AND slug = ? LIMIT 1")
-    .bind(c.req.param("slug"))
-    .first<Blueprint>();
+    .prepare("SELECT " + blueprintColumns + " FROM blueprints WHERE id = ?")
+    .bind(id)
+    .first<ExistingBlueprintRow>();
 
   if (!blueprint) {
     return c.json({ success: false, error: "Blueprint not found." }, 404);
   }
 
-  return c.json({ success: true, blueprint });
+  return c.json({ success: true, blueprint: toBlueprint(blueprint) });
 });
 
 app.post("/api/blueprints", async (c) => {
@@ -182,32 +184,35 @@ app.post("/api/blueprints", async (c) => {
     return c.json({ success: false, error: input.error }, 400);
   }
 
-  const slug = await createUniqueSlug(c.env.DB, input.value.name);
-  const priceCents = Math.round(input.value.price * 100);
-
-  await c.env.DB
+  const result = await c.env.DB
     .prepare(
       "INSERT INTO blueprints (" +
-        "slug, name, description, creator_name, category, access_type, price_cents" +
-        ") VALUES (?, ?, ?, ?, ?, ?, ?)",
+        "name, description, creator, category, file_key, preview_key, " +
+        "access_type, price, downloads, rating" +
+        ") VALUES (?, ?, ?, ?, NULL, NULL, ?, ?, 0, 0)",
     )
     .bind(
-      slug,
       input.value.name,
       input.value.description,
       input.value.creator,
       input.value.category,
       input.value.access_type,
-      priceCents,
+      input.value.price,
     )
     .run();
 
   const blueprint = await c.env.DB
-    .prepare(publishedBlueprintsQuery + " AND slug = ? LIMIT 1")
-    .bind(slug)
-    .first<Blueprint>();
+    .prepare("SELECT " + blueprintColumns + " FROM blueprints WHERE id = ?")
+    .bind(result.meta.last_row_id)
+    .first<ExistingBlueprintRow>();
 
-  return c.json({ success: true, blueprint }, 201);
+  return c.json(
+    {
+      success: true,
+      blueprint: blueprint ? toBlueprint(blueprint) : null,
+    },
+    201,
+  );
 });
 
 export default app;
