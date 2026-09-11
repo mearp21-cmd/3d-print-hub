@@ -50,7 +50,7 @@ const publishedBlueprintsQuery = [
   "  updated_at",
   "FROM blueprints",
   "WHERE status = 'published'",
-].join("\\n");
+].join("\n");
 
 function readRequiredString(
   value: unknown,
