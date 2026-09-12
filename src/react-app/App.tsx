@@ -127,9 +127,8 @@ function App() {
   const [uploadCategory, setUploadCategory] = useState("Tools & DIY");
   const [uploadAccess, setUploadAccess] = useState("Free");
   const [uploadPrice, setUploadPrice] = useState("");
-  const [creatorName, setCreatorName] = useState("");
-  const [selectedFile, setSelectedFile] = useState("");
-  const [previewFile, setPreviewFile] = useState("");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [previewFile, setPreviewFile] = useState<File | null>(null);
 
   useEffect(() => {
     fetch("/api/auth/me", { credentials: "same-origin" })
@@ -287,6 +286,14 @@ function App() {
   };
 
   const openUpload = () => {
+    if (!account) {
+      setAuthMode("login");
+      setAuthError("");
+      setAuthOpen(true);
+      showNotice("🔐 Sign in to upload a blueprint.");
+      return;
+    }
+
     setShowUpload(true);
 
     window.scrollTo({
@@ -325,7 +332,7 @@ function App() {
 
     if (!file) return;
 
-    setSelectedFile(file.name);
+    setSelectedFile(file);
   };
 
   const handlePreviewFile = (
@@ -335,17 +342,20 @@ function App() {
 
     if (!file) return;
 
-    setPreviewFile(file.name);
+    setPreviewFile(file);
   };
 
   const handlePublish = async () => {
-    if (!uploadName.trim()) {
-      showNotice("⚠️ Please enter a blueprint name.");
+    if (!account) {
+      setAuthMode("login");
+      setAuthError("");
+      setAuthOpen(true);
+      showNotice("🔐 Sign in to publish a blueprint.");
       return;
     }
 
-    if (!creatorName.trim()) {
-      showNotice("⚠️ Please enter your creator name.");
+    if (!uploadName.trim()) {
+      showNotice("⚠️ Please enter a blueprint name.");
       return;
     }
 
@@ -372,7 +382,6 @@ function App() {
           body: JSON.stringify({
             name: uploadName.trim(),
             description: uploadDescription.trim(),
-            creator: creatorName.trim(),
             category: uploadCategory,
             access_type: uploadAccess,
             price:
@@ -383,11 +392,32 @@ function App() {
         }
       );
 
-      const data = await response.json();
+      const data = await response.json().catch(() => null);
 
-      if (!response.ok || !data.success) {
+      if (!response.ok || !data?.success || !data.blueprint?.id) {
         throw new Error(
-          data.error || "Unable to publish blueprint."
+          data?.error || "Unable to publish blueprint."
+        );
+      }
+
+      const uploadData = new FormData();
+      uploadData.append("file", selectedFile, selectedFile.name);
+      if (previewFile) {
+        uploadData.append("preview", previewFile, previewFile.name);
+      }
+
+      const uploadResponse = await fetch(
+        `${API_URL}/${data.blueprint.id}/upload`,
+        {
+          method: "POST",
+          credentials: "same-origin",
+          body: uploadData,
+        },
+      );
+      const storedFile = await uploadResponse.json().catch(() => null);
+      if (!uploadResponse.ok || !storedFile?.success) {
+        throw new Error(
+          storedFile?.error || "Unable to store blueprint file.",
         );
       }
 
@@ -400,9 +430,8 @@ function App() {
       setUploadCategory("Tools & DIY");
       setUploadAccess("Free");
       setUploadPrice("");
-      setCreatorName("");
-      setSelectedFile("");
-      setPreviewFile("");
+      setSelectedFile(null);
+      setPreviewFile(null);
       setShowUpload(false);
 
       window.location.reload();
@@ -410,7 +439,7 @@ function App() {
       console.error("Publish error:", error);
 
       showNotice(
-        "❌ Something went wrong while publishing."
+        `❌ ${error instanceof Error ? error.message : "Something went wrong while publishing."}`
       );
     }
   };
@@ -556,7 +585,7 @@ function App() {
 
                   <strong>
                     {selectedFile
-                      ? selectedFile
+                      ? selectedFile.name
                       : "Choose your blueprint"}
                   </strong>
 
@@ -600,7 +629,7 @@ function App() {
 
                   <strong>
                     {previewFile
-                      ? previewFile
+                      ? previewFile.name
                       : "Add a preview image"}
                   </strong>
 
@@ -718,12 +747,14 @@ function App() {
 
                   <input
                     type="text"
-                    placeholder="Your maker name"
-                    value={creatorName}
-                    onChange={(event) =>
-                      setCreatorName(event.target.value)
-                    }
+                    value={account?.display_name ?? ""}
+                    readOnly
+                    aria-readonly="true"
                   />
+
+                  <small>
+                    This name comes from your signed-in account.
+                  </small>
 
                 </div>
 
