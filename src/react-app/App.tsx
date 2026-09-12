@@ -11,6 +11,8 @@ const categories = [
 ];
 
 const API_URL = "/api/blueprints";
+type Account = { id: number; email: string; display_name: string; created_at: string };
+type BlueprintRecord = { name: string; creator: string; category: string; rating: number; downloads: number; access_type: string; description: string };
 
 const designs = [
   {
@@ -105,6 +107,14 @@ function App() {
   const [access, setAccess] = useState("All");
   const [sort, setSort] = useState("Trending");
   const [notice, setNotice] = useState("");
+  const [account, setAccount] = useState<Account | null>(null);
+  const [authOpen, setAuthOpen] = useState(false);
+  const [authMode, setAuthMode] = useState<"login" | "register">("login");
+  const [authEmail, setAuthEmail] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
+  const [authName, setAuthName] = useState("");
+  const [authError, setAuthError] = useState("");
+  const [authBusy, setAuthBusy] = useState(false);
   const [selectedDesign, setSelectedDesign] = useState<
     (typeof designs)[number] | null
   >(null);
@@ -122,6 +132,50 @@ function App() {
   const [previewFile, setPreviewFile] = useState("");
 
   useEffect(() => {
+    fetch("/api/auth/me", { credentials: "same-origin" })
+      .then((response) => response.ok ? response.json() : null)
+      .then((data) => { if (data?.success) setAccount(data.user); })
+      .catch(() => {});
+  }, []);
+
+  const submitAuth = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (authBusy) return;
+    setAuthBusy(true);
+    setAuthError("");
+    try {
+      const response = await fetch(`/api/auth/${authMode}`, {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: authEmail, password: authPassword, display_name: authName }),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok || !data?.success || !data.user) {
+        const message = typeof data?.error === "string" ? data.error : "The account service is temporarily unavailable. Please try again.";
+        throw new Error(message);
+      }
+      setAccount(data.user);
+      setAuthPassword("");
+      setAuthOpen(false);
+    } catch (error) {
+      setAuthError(error instanceof Error ? error.message : "Unable to sign in.");
+    } finally {
+      setAuthBusy(false);
+    }
+  };
+
+  const signOut = async () => {
+    try {
+      const response = await fetch("/api/auth/logout", { method: "POST", credentials: "same-origin" });
+      if (!response.ok) throw new Error("Unable to sign out. Please try again.");
+      setAccount(null);
+    } catch (error) {
+      showNotice(error instanceof Error ? error.message : "Unable to sign out.");
+    }
+  };
+
+  useEffect(() => {
     const loadBlueprints = async () => {
       try {
         const response = await fetch(
@@ -136,7 +190,7 @@ function App() {
 
         if (data.success && data.blueprints?.length > 0) {
           const databaseDesigns = data.blueprints.map(
-            (blueprint: any) => ({
+            (blueprint: BlueprintRecord) => ({
               title: blueprint.name,
               creator: blueprint.creator,
               category: blueprint.category,
@@ -399,15 +453,8 @@ function App() {
             Membership
           </a>
 
-          <button
-            className="loginButton"
-            onClick={() =>
-              showNotice(
-                "User accounts will be connected next."
-              )
-            }
-          >
-            Sign in
+          <button className="loginButton" onClick={account ? signOut : () => setAuthOpen(true)}>
+            {account ? `Sign out (${account.display_name})` : "Sign in"}
           </button>
 
           <button
@@ -420,6 +467,26 @@ function App() {
         </nav>
 
       </header>
+
+      {authOpen && (
+        <div className="authOverlay" onMouseDown={(event) => { if (event.target === event.currentTarget) setAuthOpen(false); }}>
+          <section className="authPanel" role="dialog" aria-modal="true" aria-labelledby="authTitle">
+            <button type="button" className="authClose" aria-label="Close" onClick={() => setAuthOpen(false)}>×</button>
+            <h2 id="authTitle">{authMode === "login" ? "Sign in" : "Create your account"}</h2>
+            <p>Join the 3D Print Hub maker community.</p>
+            <form onSubmit={submitAuth}>
+              {authMode === "register" && <label>Display name<input required minLength={2} maxLength={40} autoComplete="nickname" value={authName} onChange={(event) => setAuthName(event.target.value)} /></label>}
+              <label>Email<input required type="email" autoComplete="email" value={authEmail} onChange={(event) => setAuthEmail(event.target.value)} /></label>
+              <label>Password<input required type="password" minLength={authMode === "register" ? 10 : undefined} autoComplete={authMode === "register" ? "new-password" : "current-password"} value={authPassword} onChange={(event) => setAuthPassword(event.target.value)} /></label>
+              {authError && <p className="authError" role="alert">{authError}</p>}
+              <button className="primaryButton" type="submit" disabled={authBusy}>{authBusy ? "Please wait…" : authMode === "login" ? "Sign in" : "Create account"}</button>
+            </form>
+            <button type="button" className="authSwitch" onClick={() => { setAuthError(""); setAuthMode(authMode === "login" ? "register" : "login"); }}>
+              {authMode === "login" ? "New here? Create an account" : "Already have an account? Sign in"}
+            </button>
+          </section>
+        </div>
+      )}
 
       {/* UPLOAD PAGE */}
 
