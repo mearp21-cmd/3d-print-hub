@@ -169,6 +169,14 @@ test("publishing uses the signed-in account and protects file ownership", async 
     form.append("file", file);
     form.append("preview", preview);
 
+    const anonymousUpload = await call(env, `/api/blueprints/${createdBody.blueprint.id}/upload`, {
+      method: "POST",
+      body: form,
+    });
+    assert.equal(anonymousUpload.status, 401);
+    assert.equal((await anonymousUpload.json()).code, "AUTH_REQUIRED");
+    assert.equal(env.objects.size, 0);
+
     const forbidden = await call(env, `/api/blueprints/${createdBody.blueprint.id}/upload`, {
       method: "POST",
       cookie: bob.cookie,
