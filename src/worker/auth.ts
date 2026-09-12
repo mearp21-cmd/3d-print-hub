@@ -1,8 +1,9 @@
-import type { Hono } from "hono";
+import { Hono } from "hono";
+import { bodyLimit } from "hono/body-limit";
+import { createPasswordHash, verifyPasswordHash } from "./password";
 
 const SESSION_COOKIE = "ph_session";
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
-const PBKDF2_ITERATIONS = 310_000;
 
 const encoder = new TextEncoder();
 
@@ -38,43 +39,6 @@ function base64ToBytes(value: string): Uint8Array {
     bytes[i] = binary.charCodeAt(i);
   }
   return bytes;
-}
-
-async function derivePasswordHash(
-  password: string,
-  salt: Uint8Array,
-  iterations: number,
-): Promise<string> {
-  const keyMaterial = await crypto.subtle.importKey(
-    "raw",
-    encoder.encode(password),
-    "PBKDF2",
-    false,
-    ["deriveBits"],
-  );
-
-  const bits = await crypto.subtle.deriveBits(
-    {
-      name: "PBKDF2",
-      hash: "SHA-256",
-      salt,
-      iterations,
-    },
-    keyMaterial,
-    256,
-  );
-
-  return bytesToBase64(new Uint8Array(bits));
-}
-
-function constantTimeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-
-  let difference = 0;
-  for (let i = 0; i < a.length; i += 1) {
-    difference |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  }
-  return difference === 0;
 }
 
 async function hashSessionToken(token: string): Promise<string> {
@@ -179,7 +143,20 @@ async function getCurrentUser(
   return user ? toPublicUser(user) : null;
 }
 
-export function registerAuthRoutes(app: AuthApp): void {
+export function registerAuthRoutes(parent: AuthApp): void {
+  const app: AuthApp = new Hono<{ Bindings: Env }>();
+  app.onError((error, c) => {
+    console.error("Authentication request failed", error.name);
+    return c.json({ success: false, error: "The account service is temporarily unavailable. Please try again.", code: "AUTH_SERVICE_ERROR" }, 503);
+  });
+  app.use("/api/auth/*", async (c, next) => {
+    c.header("Cache-Control", "no-store");
+    await next();
+  });
+  app.use("/api/auth/*", bodyLimit({
+    maxSize: 4096,
+    onError: (c) => c.json({ success: false, error: "Account request is too large." }, 413),
+  }));
   app.post("/api/auth/register", async (c) => {
     const body = await c.req.json().catch(() => null);
     if (!body || typeof body !== "object") {
@@ -212,11 +189,7 @@ export function registerAuthRoutes(app: AuthApp): void {
 
     const salt = new Uint8Array(16);
     crypto.getRandomValues(salt);
-    const passwordHash = await derivePasswordHash(
-      password,
-      salt,
-      PBKDF2_ITERATIONS,
-    );
+    const passwordHash = await createPasswordHash(password, salt);
 
     try {
       const result = await c.env.DB
@@ -230,7 +203,7 @@ export function registerAuthRoutes(app: AuthApp): void {
           displayName,
           passwordHash,
           bytesToBase64(salt),
-          PBKDF2_ITERATIONS,
+          0, // Unused for scrypt; parameters are identified by password_hash's version.
         )
         .run();
 
@@ -266,7 +239,7 @@ export function registerAuthRoutes(app: AuthApp): void {
     const email = normalizeEmail(input.email);
     const password = typeof input.password === "string" ? input.password : "";
 
-    if (!email || !password) {
+    if (!email || !password || password.length > 128) {
       return c.json({ success: false, error: "Invalid email or password." }, 401);
     }
 
@@ -283,13 +256,14 @@ export function registerAuthRoutes(app: AuthApp): void {
       return c.json({ success: false, error: "Invalid email or password." }, 401);
     }
 
-    const candidateHash = await derivePasswordHash(
+    const passwordMatches = await verifyPasswordHash(
       password,
       base64ToBytes(user.password_salt),
+      user.password_hash,
       user.password_iterations,
     );
 
-    if (!constantTimeEqual(candidateHash, user.password_hash)) {
+    if (!passwordMatches) {
       return c.json({ success: false, error: "Invalid email or password." }, 401);
     }
 
@@ -320,4 +294,6 @@ export function registerAuthRoutes(app: AuthApp): void {
 
     return c.json({ success: true, user });
   });
+
+  parent.route("/", app);
 }
