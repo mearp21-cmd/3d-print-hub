@@ -24,7 +24,7 @@ type CreateBlueprintInput = {
   description: string;
   creator: string;
   category: string;
-  access_type: "free" | "paid" | "pro";
+  access_type: string;
   price: number;
 };
 
@@ -133,7 +133,7 @@ function parseCreateBlueprintInput(
       description: description.value,
       creator: creator.value,
       category: category.value,
-      access_type: accessValue,
+      access_type: normalizeAccessType(accessValue),
       price,
     },
   };
@@ -184,35 +184,50 @@ app.post("/api/blueprints", async (c) => {
     return c.json({ success: false, error: input.error }, 400);
   }
 
-  const result = await c.env.DB
-    .prepare(
-      "INSERT INTO blueprints (" +
-        "name, description, creator, category, file_key, preview_key, " +
-        "access_type, price, downloads, rating" +
-        ") VALUES (?, ?, ?, ?, NULL, NULL, ?, ?, 0, 0)",
-    )
-    .bind(
-      input.value.name,
-      input.value.description,
-      input.value.creator,
-      input.value.category,
-      input.value.access_type,
-      input.value.price,
-    )
-    .run();
+  try {
+    const result = await c.env.DB
+      .prepare(
+        "INSERT INTO blueprints (" +
+          "name, description, creator, category, file_key, preview_key, " +
+          "access_type, price, downloads, rating, created_at" +
+          ") VALUES (?, ?, ?, ?, ?, NULL, ?, ?, 0, 0, CURRENT_TIMESTAMP)",
+      )
+      .bind(
+        input.value.name,
+        input.value.description,
+        input.value.creator,
+        input.value.category,
+        "pending",
+        input.value.access_type,
+        input.value.price,
+      )
+      .run();
 
-  const blueprint = await c.env.DB
-    .prepare("SELECT " + blueprintColumns + " FROM blueprints WHERE id = ?")
-    .bind(result.meta.last_row_id)
-    .first<ExistingBlueprintRow>();
+    const blueprint = await c.env.DB
+      .prepare("SELECT " + blueprintColumns + " FROM blueprints WHERE id = ?")
+      .bind(result.meta.last_row_id)
+      .first<ExistingBlueprintRow>();
 
-  return c.json(
-    {
-      success: true,
-      blueprint: blueprint ? toBlueprint(blueprint) : null,
-    },
-    201,
-  );
+    return c.json(
+      {
+        success: true,
+        blueprint: blueprint ? toBlueprint(blueprint) : null,
+      },
+      201,
+    );
+  } catch (error) {
+    console.error(
+      "Failed to create blueprint",
+      error instanceof Error ? error.message : "Unknown database error",
+    );
+    return c.json(
+      {
+        success: false,
+        error: "Unable to create blueprint. Please try again later.",
+      },
+      500,
+    );
+  }
 });
 
 export default app;
