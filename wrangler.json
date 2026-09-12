@@ -21,5 +21,11 @@
 			"database_name": "3d-print-hub-db",
 			"database_id": "3d3dc7c2-14f5-434e-afc9-17f9e2e047bf"
 		}
+	],
+	"r2_buckets": [
+		{
+			"binding": "BLUEPRINTS",
+			"bucket_name": "3d-print-hub-blueprints"
+		}
 	]
 }
