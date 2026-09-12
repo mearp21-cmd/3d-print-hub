@@ -150,8 +150,11 @@ function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: authEmail, password: authPassword, display_name: authName }),
       });
-      const data = await response.json();
-      if (!response.ok || !data.success) throw new Error(data.error || "Unable to sign in.");
+      const data = await response.json().catch(() => null);
+      if (!response.ok || !data?.success || !data.user) {
+        const message = typeof data?.error === "string" ? data.error : "The account service is temporarily unavailable. Please try again.";
+        throw new Error(message);
+      }
       setAccount(data.user);
       setAuthPassword("");
       setAuthOpen(false);
