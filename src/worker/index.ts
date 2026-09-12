@@ -317,14 +317,17 @@ app.post(
     }
 
     const fileValues = formData.getAll("file");
-    const suppliedFiles = Array.from(formData.values()).filter(
-      (value): value is File => value instanceof File,
-    );
+    let suppliedFileCount = 0;
+    formData.forEach((value) => {
+      if (value instanceof File) {
+        suppliedFileCount += 1;
+      }
+    });
 
     if (
       fileValues.length !== 1 ||
       !(fileValues[0] instanceof File) ||
-      suppliedFiles.length !== 1
+      suppliedFileCount !== 1
     ) {
       return c.json(
         {
