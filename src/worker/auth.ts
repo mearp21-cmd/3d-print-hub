@@ -112,7 +112,10 @@ function parseCookie(request: Request, name: string): string | null {
     const separator = part.indexOf("=");
     if (separator === -1) continue;
     const key = part.slice(0, separator).trim();
-    if (key === name) return decodeURIComponent(part.slice(separator + 1).trim());
+    if (key === name) {
+      try { return decodeURIComponent(part.slice(separator + 1).trim()); }
+      catch { return null; }
+    }
   }
 
   return null;
@@ -168,7 +171,7 @@ async function getCurrentUser(
               u.password_iterations, u.created_at
        FROM sessions s
        JOIN users u ON u.id = s.user_id
-       WHERE s.token_hash = ? AND s.expires_at > CURRENT_TIMESTAMP`,
+       WHERE s.token_hash = ? AND datetime(s.expires_at) > datetime('now')`,
     )
     .bind(tokenHash)
     .first<UserRow>();
