@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
+import { getCurrentUser } from "./auth";
 
 type ExistingBlueprintRow = {
   id: number;
@@ -23,7 +24,6 @@ type Blueprint = ExistingBlueprintRow & {
 type CreateBlueprintInput = {
   name: string;
   description: string;
-  creator: string;
   category: string;
   access_type: string;
   price: number;
@@ -47,6 +47,8 @@ const blueprintColumns = [
 ].join("\n");
 
 const MAX_BLUEPRINT_FILE_SIZE = 50 * 1024 * 1024;
+const MAX_PREVIEW_FILE_SIZE = 5 * 1024 * 1024;
+const MAX_UPLOAD_SIZE = MAX_BLUEPRINT_FILE_SIZE + MAX_PREVIEW_FILE_SIZE;
 
 const blueprintFileContentTypes = {
   ".stl": "model/stl",
@@ -55,11 +57,20 @@ const blueprintFileContentTypes = {
   ".zip": "application/zip",
 } as const;
 
+const previewFileContentTypes = {
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".webp": "image/webp",
+} as const;
+
 type BlueprintFileExtension = keyof typeof blueprintFileContentTypes;
+type PreviewFileExtension = keyof typeof previewFileContentTypes;
 
 type BlueprintFileReference = {
   id: number;
   file_key: string | null;
+  user_id: number | null;
 };
 
 function readRequiredString(
@@ -119,6 +130,20 @@ function getBlueprintFileExtension(
     : null;
 }
 
+function getPreviewFileExtension(filename: string): PreviewFileExtension | null {
+  const normalized = filename.trim().toLowerCase();
+  const separator = normalized.lastIndexOf(".");
+
+  if (separator <= 0 || separator === normalized.length - 1) {
+    return null;
+  }
+
+  const extension = normalized.slice(separator);
+  return extension in previewFileContentTypes
+    ? (extension as PreviewFileExtension)
+    : null;
+}
+
 function getSafeUploadFilename(
   filename: string,
   extension: BlueprintFileExtension,
@@ -166,9 +191,6 @@ function parseCreateBlueprintInput(
   const description = readRequiredString(input.description, "description");
   if ("error" in description) return description;
 
-  const creator = readRequiredString(input.creator, "creator");
-  if ("error" in creator) return creator;
-
   const category = readRequiredString(input.category, "category");
   if ("error" in category) return category;
 
@@ -198,7 +220,6 @@ function parseCreateBlueprintInput(
     value: {
       name: name.value,
       description: description.value,
-      creator: creator.value,
       category: category.value,
       access_type: normalizeAccessType(accessValue),
       price,
@@ -247,17 +268,29 @@ app.get("/api/blueprints/:id", async (c) => {
 app.post(
   "/api/blueprints/:id/upload",
   bodyLimit({
-    maxSize: MAX_BLUEPRINT_FILE_SIZE,
+    maxSize: MAX_UPLOAD_SIZE,
     onError: (c) =>
       c.json(
         {
           success: false,
-          error: "Blueprint files must be 50 MB or smaller.",
+          error: "Blueprint uploads must be 55 MB or smaller.",
         },
         413,
       ),
   }),
   async (c) => {
+    const user = await getCurrentUser(c.env.DB, c.req.raw);
+    if (!user) {
+      return c.json(
+        {
+          success: false,
+          error: "Sign in to upload a blueprint file.",
+          code: "AUTH_REQUIRED",
+        },
+        401,
+      );
+    }
+
     const id = parseBlueprintId(c.req.param("id"));
     if (!id) {
       return c.json({ success: false, error: "Blueprint not found." }, 404);
@@ -267,7 +300,7 @@ app.post(
 
     try {
       blueprint = await c.env.DB
-        .prepare("SELECT id, file_key FROM blueprints WHERE id = ?")
+        .prepare("SELECT id, file_key, user_id FROM blueprints WHERE id = ?")
         .bind(id)
         .first<BlueprintFileReference>();
     } catch (error) {
@@ -280,6 +313,17 @@ app.post(
 
     if (!blueprint) {
       return c.json({ success: false, error: "Blueprint not found." }, 404);
+    }
+
+    if (blueprint.user_id !== user.id) {
+      return c.json(
+        {
+          success: false,
+          error: "You do not have permission to upload this blueprint file.",
+          code: "BLUEPRINT_FORBIDDEN",
+        },
+        403,
+      );
     }
 
     const currentFileKey = blueprint.file_key?.trim();
@@ -317,6 +361,14 @@ app.post(
     }
 
     const fileValues = formData.getAll("file");
+    const previewValues = formData.getAll("preview");
+    const preview =
+      previewValues.length === 1 && previewValues[0] instanceof File
+        ? previewValues[0]
+        : null;
+    const invalidPreview =
+      previewValues.length > 1 ||
+      (previewValues.length === 1 && !(previewValues[0] instanceof File));
     let suppliedFileCount = 0;
     formData.forEach((value) => {
       if (value instanceof File) {
@@ -327,7 +379,8 @@ app.post(
     if (
       fileValues.length !== 1 ||
       !(fileValues[0] instanceof File) ||
-      suppliedFileCount !== 1
+      invalidPreview ||
+      suppliedFileCount !== (preview ? 2 : 1)
     ) {
       return c.json(
         {
@@ -368,9 +421,43 @@ app.post(
       );
     }
 
+    let previewExtension: PreviewFileExtension | null = null;
+    if (preview) {
+      if (preview.size === 0) {
+        return c.json(
+          { success: false, error: "Preview images cannot be empty." },
+          400,
+        );
+      }
+
+      if (preview.size > MAX_PREVIEW_FILE_SIZE) {
+        return c.json(
+          {
+            success: false,
+            error: "Preview images must be 5 MB or smaller.",
+          },
+          413,
+        );
+      }
+
+      previewExtension = getPreviewFileExtension(preview.name);
+      if (!previewExtension) {
+        return c.json(
+          {
+            success: false,
+            error: "Supported preview images are .png, .jpg, .jpeg, and .webp.",
+          },
+          415,
+        );
+      }
+    }
+
     const filename = getSafeUploadFilename(file.name, extension);
     const storedKey =
       "blueprints/" + id + "/" + crypto.randomUUID() + extension;
+    const storedPreviewKey = preview && previewExtension
+      ? "blueprints/" + id + "/preview-" + crypto.randomUUID() + previewExtension
+      : null;
 
     try {
       await c.env.BLUEPRINTS.put(storedKey, file.stream(), {
@@ -379,17 +466,29 @@ app.post(
         },
       });
 
+      if (preview && previewExtension && storedPreviewKey) {
+        await c.env.BLUEPRINTS.put(storedPreviewKey, preview.stream(), {
+          httpMetadata: {
+            contentType: previewFileContentTypes[previewExtension],
+          },
+        });
+      }
+
       const updateResult = await c.env.DB
         .prepare(
-          "UPDATE blueprints SET file_key = ? WHERE id = ? AND " +
+          "UPDATE blueprints SET file_key = ?, preview_key = COALESCE(?, preview_key) WHERE id = ? AND " +
+            "user_id = ? AND " +
             "(file_key IS NULL OR TRIM(file_key) = '' OR file_key = 'pending')",
         )
-        .bind(storedKey, id)
+        .bind(storedKey, storedPreviewKey, id, user.id)
         .run();
 
       if (updateResult.meta.changes !== 1) {
         try {
           await c.env.BLUEPRINTS.delete(storedKey);
+          if (storedPreviewKey) {
+            await c.env.BLUEPRINTS.delete(storedPreviewKey);
+          }
         } catch (cleanupError) {
           logStorageError(
             "Failed to remove unlinked blueprint object",
@@ -412,6 +511,7 @@ app.post(
           blueprint_id: id,
           filename,
           stored_key: storedKey,
+          preview_key: storedPreviewKey,
         },
         201,
       );
@@ -420,6 +520,9 @@ app.post(
 
       try {
         await c.env.BLUEPRINTS.delete(storedKey);
+        if (storedPreviewKey) {
+          await c.env.BLUEPRINTS.delete(storedPreviewKey);
+        }
       } catch (cleanupError) {
         logStorageError(
           "Failed to remove unlinked blueprint object",
@@ -488,6 +591,18 @@ app.get("/api/blueprints/:id/download", async (c) => {
 });
 
 app.post("/api/blueprints", async (c) => {
+  const user = await getCurrentUser(c.env.DB, c.req.raw);
+  if (!user) {
+    return c.json(
+      {
+        success: false,
+        error: "Sign in to publish a blueprint.",
+        code: "AUTH_REQUIRED",
+      },
+      401,
+    );
+  }
+
   const body = await c.req.json().catch(() => null);
   const input = parseCreateBlueprintInput(body);
 
@@ -500,17 +615,18 @@ app.post("/api/blueprints", async (c) => {
       .prepare(
         "INSERT INTO blueprints (" +
           "name, description, creator, category, file_key, preview_key, " +
-          "access_type, price, downloads, rating, created_at" +
-          ") VALUES (?, ?, ?, ?, ?, NULL, ?, ?, 0, 0, CURRENT_TIMESTAMP)",
+          "access_type, price, downloads, rating, created_at, user_id" +
+          ") VALUES (?, ?, ?, ?, ?, NULL, ?, ?, 0, 0, CURRENT_TIMESTAMP, ?)",
       )
       .bind(
         input.value.name,
         input.value.description,
-        input.value.creator,
+        user.display_name,
         input.value.category,
         "pending",
         input.value.access_type,
         input.value.price,
+        user.id,
       )
       .run();
 

@@ -19,7 +19,7 @@ type UserRow = {
   created_at: string;
 };
 
-type PublicUser = {
+export type PublicUser = {
   id: number;
   email: string;
   display_name: string;
@@ -121,7 +121,7 @@ async function createSession(db: D1Database, userId: number): Promise<string> {
   return token;
 }
 
-async function getCurrentUser(
+export async function getCurrentUser(
   db: D1Database,
   request: Request,
 ): Promise<PublicUser | null> {
