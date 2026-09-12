@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { bodyLimit } from "hono/body-limit";
 
 type ExistingBlueprintRow = {
   id: number;
@@ -45,6 +46,22 @@ const blueprintColumns = [
   "created_at",
 ].join("\n");
 
+const MAX_BLUEPRINT_FILE_SIZE = 50 * 1024 * 1024;
+
+const blueprintFileContentTypes = {
+  ".stl": "model/stl",
+  ".3mf": "model/3mf",
+  ".obj": "model/obj",
+  ".zip": "application/zip",
+} as const;
+
+type BlueprintFileExtension = keyof typeof blueprintFileContentTypes;
+
+type BlueprintFileReference = {
+  id: number;
+  file_key: string | null;
+};
+
 function readRequiredString(
   value: unknown,
   field: string,
@@ -83,6 +100,56 @@ function parseBlueprintId(value: string): number | null {
 
   const id = Number(value);
   return Number.isSafeInteger(id) ? id : null;
+}
+
+
+function getBlueprintFileExtension(
+  filename: string,
+): BlueprintFileExtension | null {
+  const normalized = filename.trim().toLowerCase();
+  const separator = normalized.lastIndexOf(".");
+
+  if (separator <= 0 || separator === normalized.length - 1) {
+    return null;
+  }
+
+  const extension = normalized.slice(separator);
+  return extension in blueprintFileContentTypes
+    ? (extension as BlueprintFileExtension)
+    : null;
+}
+
+function getSafeUploadFilename(
+  filename: string,
+  extension: BlueprintFileExtension,
+): string {
+  const baseName = filename
+    .trim()
+    .slice(0, -extension.length)
+    .replace(/[^a-zA-Z0-9_-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80);
+
+  return (baseName || "blueprint") + extension;
+}
+
+function getDownloadFilename(id: number, objectKey: string): string {
+  const extension = getBlueprintFileExtension(objectKey) ?? ".bin";
+  return "blueprint-" + id + extension;
+}
+
+function getContentType(objectKey: string): string {
+  const extension = getBlueprintFileExtension(objectKey);
+  return extension
+    ? blueprintFileContentTypes[extension]
+    : "application/octet-stream";
+}
+
+function logStorageError(operation: string, error: unknown): void {
+  console.error(
+    operation,
+    error instanceof Error ? error.message : "Unknown storage error",
+  );
 }
 
 function parseCreateBlueprintInput(
@@ -174,6 +241,247 @@ app.get("/api/blueprints/:id", async (c) => {
   }
 
   return c.json({ success: true, blueprint: toBlueprint(blueprint) });
+});
+
+
+app.post(
+  "/api/blueprints/:id/upload",
+  bodyLimit({
+    maxSize: MAX_BLUEPRINT_FILE_SIZE,
+    onError: (c) =>
+      c.json(
+        {
+          success: false,
+          error: "Blueprint files must be 50 MB or smaller.",
+        },
+        413,
+      ),
+  }),
+  async (c) => {
+    const id = parseBlueprintId(c.req.param("id"));
+    if (!id) {
+      return c.json({ success: false, error: "Blueprint not found." }, 404);
+    }
+
+    let blueprint: BlueprintFileReference | null;
+
+    try {
+      blueprint = await c.env.DB
+        .prepare("SELECT id, file_key FROM blueprints WHERE id = ?")
+        .bind(id)
+        .first<BlueprintFileReference>();
+    } catch (error) {
+      logStorageError("Failed to look up blueprint for upload", error);
+      return c.json(
+        { success: false, error: "Unable to upload blueprint file." },
+        500,
+      );
+    }
+
+    if (!blueprint) {
+      return c.json({ success: false, error: "Blueprint not found." }, 404);
+    }
+
+    const currentFileKey = blueprint.file_key?.trim();
+    if (currentFileKey && currentFileKey !== "pending") {
+      return c.json(
+        {
+          success: false,
+          error: "A blueprint file has already been stored for this blueprint.",
+        },
+        409,
+      );
+    }
+
+    const requestContentType = c.req.header("content-type") ?? "";
+    if (!requestContentType.toLowerCase().startsWith("multipart/form-data")) {
+      return c.json(
+        {
+          success: false,
+          error: "Upload requests must use multipart/form-data.",
+        },
+        415,
+      );
+    }
+
+    let formData: FormData;
+
+    try {
+      formData = await c.req.formData();
+    } catch (error) {
+      logStorageError("Failed to read blueprint upload form data", error);
+      return c.json(
+        { success: false, error: "A valid blueprint file is required." },
+        400,
+      );
+    }
+
+    const fileValues = formData.getAll("file");
+    const suppliedFiles = Array.from(formData.values()).filter(
+      (value): value is File => value instanceof File,
+    );
+
+    if (
+      fileValues.length !== 1 ||
+      !(fileValues[0] instanceof File) ||
+      suppliedFiles.length !== 1
+    ) {
+      return c.json(
+        {
+          success: false,
+          error: "Provide exactly one blueprint file using the file field.",
+        },
+        400,
+      );
+    }
+
+    const file = fileValues[0];
+
+    if (file.size === 0) {
+      return c.json(
+        { success: false, error: "Blueprint files cannot be empty." },
+        400,
+      );
+    }
+
+    if (file.size > MAX_BLUEPRINT_FILE_SIZE) {
+      return c.json(
+        {
+          success: false,
+          error: "Blueprint files must be 50 MB or smaller.",
+        },
+        413,
+      );
+    }
+
+    const extension = getBlueprintFileExtension(file.name);
+    if (!extension) {
+      return c.json(
+        {
+          success: false,
+          error: "Supported blueprint files are .stl, .3mf, .obj, and .zip.",
+        },
+        415,
+      );
+    }
+
+    const filename = getSafeUploadFilename(file.name, extension);
+    const storedKey =
+      "blueprints/" + id + "/" + crypto.randomUUID() + extension;
+
+    try {
+      await c.env.BLUEPRINTS.put(storedKey, file.stream(), {
+        httpMetadata: {
+          contentType: blueprintFileContentTypes[extension],
+        },
+      });
+
+      const updateResult = await c.env.DB
+        .prepare(
+          "UPDATE blueprints SET file_key = ? WHERE id = ? AND " +
+            "(file_key IS NULL OR TRIM(file_key) = '' OR file_key = 'pending')",
+        )
+        .bind(storedKey, id)
+        .run();
+
+      if (updateResult.meta.changes !== 1) {
+        try {
+          await c.env.BLUEPRINTS.delete(storedKey);
+        } catch (cleanupError) {
+          logStorageError(
+            "Failed to remove unlinked blueprint object",
+            cleanupError,
+          );
+        }
+
+        return c.json(
+          {
+            success: false,
+            error: "A blueprint file has already been stored for this blueprint.",
+          },
+          409,
+        );
+      }
+
+      return c.json(
+        {
+          success: true,
+          blueprint_id: id,
+          filename,
+          stored_key: storedKey,
+        },
+        201,
+      );
+    } catch (error) {
+      logStorageError("Failed to store blueprint file", error);
+
+      try {
+        await c.env.BLUEPRINTS.delete(storedKey);
+      } catch (cleanupError) {
+        logStorageError(
+          "Failed to remove unlinked blueprint object",
+          cleanupError,
+        );
+      }
+
+      return c.json(
+        { success: false, error: "Unable to store blueprint file." },
+        500,
+      );
+    }
+  },
+);
+
+app.get("/api/blueprints/:id/download", async (c) => {
+  const id = parseBlueprintId(c.req.param("id"));
+  if (!id) {
+    return c.json({ success: false, error: "Blueprint not found." }, 404);
+  }
+
+  try {
+    const blueprint = await c.env.DB
+      .prepare("SELECT id, file_key FROM blueprints WHERE id = ?")
+      .bind(id)
+      .first<BlueprintFileReference>();
+
+    if (!blueprint) {
+      return c.json({ success: false, error: "Blueprint not found." }, 404);
+    }
+
+    const fileKey = blueprint.file_key?.trim();
+    if (!fileKey || fileKey === "pending") {
+      return c.json(
+        { success: false, error: "Blueprint file not found." },
+        404,
+      );
+    }
+
+    const object = await c.env.BLUEPRINTS.get(fileKey);
+    if (!object) {
+      return c.json(
+        { success: false, error: "Blueprint file not found." },
+        404,
+      );
+    }
+
+    const filename = getDownloadFilename(id, fileKey);
+
+    return new Response(object.body, {
+      headers: {
+        "Content-Type": getContentType(fileKey),
+        "Content-Disposition": 'attachment; filename="' + filename + '"',
+        "Content-Length": String(object.size),
+        "Cache-Control": "private, no-store",
+        "X-Content-Type-Options": "nosniff",
+      },
+    });
+  } catch (error) {
+    logStorageError("Failed to download blueprint file", error);
+    return c.json(
+      { success: false, error: "Unable to download blueprint file." },
+      500,
+    );
+  }
 });
 
 app.post("/api/blueprints", async (c) => {
