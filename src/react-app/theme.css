@@ -1,0 +1,63 @@
+:root {
+  --hub-bg: #07111d;
+  --hub-surface: #0d1b2a;
+  --hub-surface-2: #122235;
+  --hub-blue: #0ea5e9;
+  --hub-blue-soft: #38bdf8;
+  --hub-purple: #8b5cf6;
+  --hub-green: #22c55e;
+  --hub-orange: #f59e0b;
+  --hub-red: #ef4444;
+  --hub-text: #f8fafc;
+  --hub-muted: #94a3b8;
+  --hub-border: rgba(148, 163, 184, .16);
+}
+
+body {
+  background:
+    radial-gradient(circle at 78% 5%, rgba(14,165,233,.13), transparent 28%),
+    radial-gradient(circle at 15% 38%, rgba(139,92,246,.07), transparent 24%),
+    var(--hub-bg);
+  color: var(--hub-text);
+}
+
+.site { min-height: 100vh; }
+.navbar { background: rgba(7,17,29,.9); border-color: var(--hub-border); box-shadow: 0 8px 35px rgba(0,0,0,.22); }
+.logoBox, .primaryButton, .searchBox button { background: linear-gradient(135deg,var(--hub-blue),var(--hub-blue-soft)); color: #03111b; }
+.primaryButton { box-shadow: 0 8px 24px rgba(14,165,233,.2); }
+.loginButton { border-color: var(--hub-border); background: rgba(255,255,255,.035); color: var(--hub-text); }
+.hero { background: radial-gradient(circle at 76% 46%, rgba(14,165,233,.11), transparent 30%); }
+.hero h1 span, .heroBadge, .logo b { color: var(--hub-blue-soft); }
+.heroCard { border-color: rgba(14,165,233,.25); background: linear-gradient(145deg,rgba(18,34,53,.95),rgba(7,17,29,.9)); box-shadow: 0 30px 80px rgba(0,0,0,.42),0 0 70px rgba(14,165,233,.1); }
+.heroIcon { filter: drop-shadow(0 22px 26px rgba(14,165,233,.18)); }
+.featureStrip, .categoryCard, .designCard, .creatorCard, .plan, .uploadCard { border-color: var(--hub-border); background: rgba(13,27,42,.78); }
+.categoryCard:hover, .designCard:hover { border-color: rgba(14,165,233,.45); box-shadow: 0 16px 40px rgba(0,0,0,.25); }
+.categoryIcon { background: rgba(14,165,233,.1); }
+.designImage { background: radial-gradient(circle at center,rgba(14,165,233,.14),transparent 55%),var(--hub-surface-2); }
+.designTag { background: var(--hub-orange); color: #201300; }
+.designCard:nth-child(3n+2) .designTag { background: var(--hub-purple); color: white; }
+.designCard:nth-child(3n) .designTag { background: var(--hub-green); color: #03150a; }
+.heart { border-color: var(--hub-border); background: rgba(7,17,29,.76); }
+.heart:hover { color: var(--hub-red); border-color: rgba(239,68,68,.5); }
+.creatorCard:nth-child(1) { border-top: 3px solid var(--hub-blue); }
+.creatorCard:nth-child(2) { border-top: 3px solid var(--hub-purple); }
+.creatorCard:nth-child(3) { border-top: 3px solid var(--hub-green); }
+.creatorCard:nth-child(4) { border-top: 3px solid var(--hub-orange); }
+.plan.featured { border-color: rgba(139,92,246,.7); background: linear-gradient(145deg,rgba(139,92,246,.14),rgba(13,27,42,.82)); box-shadow: 0 22px 65px rgba(139,92,246,.1); }
+.plan.featured .planBadge { background: var(--hub-purple); }
+.plan li::before { color: var(--hub-green); }
+.notice { border-color: rgba(34,197,94,.45); background: #0b2418; }
+.authPanel, .blueprintModal { border-color: rgba(139,92,246,.35); background: var(--hub-surface); }
+.authPanel input:focus { outline-color: var(--hub-blue); }
+.modalVisual { background: radial-gradient(circle at center,rgba(139,92,246,.17),transparent 55%),#08131f; }
+.modalTag { background: rgba(139,92,246,.16); border-color: rgba(139,92,246,.35); color: #c4b5fd; }
+.modalStats { color: var(--hub-blue-soft); }
+.uploadCard input:focus, .uploadCard textarea:focus, .uploadCard select:focus { border-color: var(--hub-blue); box-shadow: 0 0 0 3px rgba(14,165,233,.1); }
+
+/* Functional colour language: blue=brand/actions, purple=premium, green=success/free, orange=trending, red=critical. */
+.designTag:has(+ *) { transition: transform .2s ease; }
+
+@media (max-width: 720px) {
+  .navbar { background: rgba(7,17,29,.96); }
+  .hero { background: radial-gradient(circle at 50% 20%,rgba(14,165,233,.1),transparent 34%); }
+}
